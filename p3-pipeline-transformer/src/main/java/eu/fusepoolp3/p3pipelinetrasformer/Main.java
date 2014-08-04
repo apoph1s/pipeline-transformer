@@ -15,7 +15,7 @@ public class Main {
     private static void start(Arguments arguments) throws Exception {
         ExtractorServer server = new ExtractorServer(arguments.getPort());
 
-        //DictionaryMatcher.getInstance();
+        Pipeline.getInstance();
 
         server.start(new PipelineTransformer());
 

@@ -6,11 +6,13 @@ package eu.fusepoolp3.p3pipelinetrasformer;
 
 import eu.fusepool.extractor.HttpRequestEntity;
 import eu.fusepool.extractor.RdfGeneratingExtractor;
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.net.URLDecoder;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 import javax.activation.MimeType;
 import javax.activation.MimeTypeParseException;
@@ -32,17 +34,17 @@ public class PipelineTransformer extends RdfGeneratingExtractor {
     @Override
     protected TripleCollection generateRdf(HttpRequestEntity entity) throws IOException {
         final String queryString = entity.getRequest().getQueryString();
-        final String data = IOUtils.toString(entity.getData(), "UTF-8");
-        final TripleCollection result = new SimpleMGraph();  
+        final String text = IOUtils.toString(entity.getData(), "UTF-8");
+        final TripleCollection result = new SimpleMGraph();
         final GraphNode node = new GraphNode(new BNode(), result);
         GraphNode nodes;
-        
+
 //        System.out.println(queryString);
 //        System.out.println(data);
-       
-        HashMap<String,String> queryParams = new HashMap<>();
-        
-        if(queryString != null){
+
+        HashMap<String, String> queryParams = new HashMap<>();
+
+        if (queryString != null) {
             String[] params = queryString.split("&");
             String[] param;
             for (int i = 0; i < params.length; i++) {
@@ -50,41 +52,41 @@ public class PipelineTransformer extends RdfGeneratingExtractor {
                 queryParams.put(param[0], param[1]);
             }
         }
+
+        String uriString = queryParams.get("uri");
+
+        if (uriString == null) {
+            throw new RuntimeException("No list of transformers was supplied!");
+        }
+
+        Pipeline pipeline = Pipeline.getInstance();
+        Transformer transformer;
+        URI uri;
+
+        try {
+            uri = new URI(uriString);
+        } catch (URISyntaxException e) {
+            throw new RuntimeException("URI syntax error!", e);
+        }
         
-        ////////////
-        //  TODO!!!!!!!!
-        ///////////
+        try (BufferedReader in = new BufferedReader(new InputStreamReader(uri.toURL().openStream()))) {
+            String line;
+            while ((line = in.readLine()) != null) {
+                if (!line.isEmpty()) {
+                    transformer = new Transformer(line);
+                    pipeline.AddTransformer(transformer);
+                }
+            }
+        }
         
-//        DictionaryMatcher dm = DictionaryMatcher.getInstance();
-//        
-//        String urldecode = queryParams.get("urldecode");
-//        String uri = queryParams.get("taxonomy");
-//        String name = queryParams.get("name");
-//        String delete = queryParams.get("delete");
-//        String text = data;
-//        
-//        if(urldecode != null){
-//            if(uri != null) { uri = URLDecoder.decode(uri, "UTF-8"); }
-//            if(name != null) { name = URLDecoder.decode(name, "UTF-8"); }
-//            if(text != null) { text = URLDecoder.decode(data, "UTF-8"); }
-//        }  
-//        
-//        if(uri != null){
-//            // if no name was provided add default (for gui purpose)
-//            if(name == null) { name = uri; }
-//            
-//            // if uri of the taxonomy and data were provided annotate text
-//            if (text != null && !text.isEmpty()) {
-//                node.addProperty(RDF.type, new UriRef("http://example.org/ontology#TextDescription"));
-//                node.addPropertyValue(SIOC.content, text);
-//                node.addPropertyValue(new UriRef("http://example.org/ontology#textLength"), text.length());
-//
-//                // if taxonomy does not exist add it first
-//                if(!dm.IsExisting(uri)){
-//                    dm.AddTaxonomy(uri, name);
-//                }
-//                
-//                // create output from annotations
+        pipeline.Run();
+
+        // if uri of the taxonomy and data were provided annotate text
+        if (text != null && !text.isEmpty()) {
+            node.addProperty(RDF.type, new UriRef("http://example.org/ontology#TextDescription"));
+            node.addPropertyValue(SIOC.content, text);
+            node.addPropertyValue(new UriRef("http://example.org/ontology#textLength"), text.length());
+
 //                for (Annotation e : dm.GetLabels(uri, text)) {
 //                    nodes = new GraphNode(new BNode(), result);
 //                    nodes.addProperty(RDF.type, new UriRef("http://example.org/ontology#Annotation"));
@@ -97,42 +99,11 @@ public class PipelineTransformer extends RdfGeneratingExtractor {
 //                    nodes.addPropertyValue(new UriRef("http://example.org/ontology#begin"), e.getBegin());
 //                    nodes.addPropertyValue(new UriRef("http://example.org/ontology#end"), e.getEnd());
 //                }
-//            } else {
-//                // if only the taxonomy was provided add as new and return existing taxonomies
-//                if(delete == null){
-//                    if(!dm.IsExisting(uri)){
-//                        dm.AddTaxonomy(uri, name);
-//                    }
-//                }
-//                // if only the taxonomy and a delete flag were provided delete given taxonomy and return remaining taxonomies
-//                else{
-//                    dm.DeleteTaxonomy(uri);
-//                }
-//                // create output from taxonomies
-//                for (Taxonomy t : dm.GetTaxonomies()) {
-//                    nodes = new GraphNode(new BNode(), result);
-//                    nodes.addProperty(RDF.type, new UriRef("http://example.org/ontology#Taxonomy"));
-//                    nodes.addPropertyValue(new UriRef("http://example.org/ontology#id"), t.getID());
-//                    nodes.addPropertyValue(new UriRef("http://example.org/ontology#name"), t.getName());
-//                    nodes.addPropertyValue(new UriRef("http://example.org/ontology#reference"), new UriRef(t.getUri()));
-//                }
 //            }
-//        }
-//        // if no uri string were provided get existing taxonomies
-//        else{ 
-//            // create output from taxonomies
-//            for (Taxonomy t : dm.GetTaxonomies()) {
-//                nodes = new GraphNode(new BNode(), result);
-//                nodes.addProperty(RDF.type, new UriRef("http://example.org/ontology#Taxonomy"));
-//                nodes.addPropertyValue(new UriRef("http://example.org/ontology#id"), t.getID());
-//                nodes.addPropertyValue(new UriRef("http://example.org/ontology#name"), t.getName());
-//                nodes.addPropertyValue(new UriRef("http://example.org/ontology#reference"), new UriRef(t.getUri()));
-//            }
-//        }
-        
+        }
+
         return result;
     }
-
 
     @Override
     public Set<MimeType> getSupportedInputFormats() {
@@ -143,7 +114,7 @@ public class PipelineTransformer extends RdfGeneratingExtractor {
             throw new RuntimeException(ex);
         }
     }
-    
+
     @Override
     public boolean isLongRunning() {
         return false;
