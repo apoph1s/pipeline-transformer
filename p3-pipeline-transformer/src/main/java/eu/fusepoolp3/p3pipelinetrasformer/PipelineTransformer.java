@@ -34,10 +34,10 @@ public class PipelineTransformer extends RdfGeneratingExtractor {
     @Override
     protected TripleCollection generateRdf(HttpRequestEntity entity) throws IOException {
         final String queryString = entity.getRequest().getQueryString();
-        final String text = IOUtils.toString(entity.getData(), "UTF-8");
+        final String data = IOUtils.toString(entity.getData(), "UTF-8");
         final TripleCollection result = new SimpleMGraph();
         final GraphNode node = new GraphNode(new BNode(), result);
-        GraphNode nodes;
+        String output;
 
 //        System.out.println(queryString);
 //        System.out.println(data);
@@ -59,7 +59,7 @@ public class PipelineTransformer extends RdfGeneratingExtractor {
             throw new RuntimeException("No list of transformers was supplied!");
         }
 
-        Pipeline pipeline = Pipeline.getInstance();
+        Pipeline pipeline = new Pipeline(getSupportedInputFormats(), getSupportedOutputFormats());
         Transformer transformer;
         URI uri;
 
@@ -74,33 +74,21 @@ public class PipelineTransformer extends RdfGeneratingExtractor {
             while ((line = in.readLine()) != null) {
                 if (!line.isEmpty()) {
                     transformer = new Transformer(line);
-                    pipeline.AddTransformer(transformer);
+                    pipeline.addTransformer(transformer);
                 }
             }
         }
         
-        pipeline.Run();
-
-        // if uri of the taxonomy and data were provided annotate text
-        if (text != null && !text.isEmpty()) {
-            node.addProperty(RDF.type, new UriRef("http://example.org/ontology#TextDescription"));
-            node.addPropertyValue(SIOC.content, text);
-            node.addPropertyValue(new UriRef("http://example.org/ontology#textLength"), text.length());
-
-//                for (Annotation e : dm.GetLabels(uri, text)) {
-//                    nodes = new GraphNode(new BNode(), result);
-//                    nodes.addProperty(RDF.type, new UriRef("http://example.org/ontology#Annotation"));
-//                    nodes.addPropertyValue(new UriRef("http://example.org/ontology#prefLabel"), e.getPrefLabel());
-//                    if (e.getAltLabel() != null) {
-//                        nodes.addPropertyValue(new UriRef("http://example.org/ontology#altLabel"), e.getAltLabel());
-//                    }
-//                    nodes.addPropertyValue(new UriRef("http://example.org/ontology#reference"), new UriRef(e.getUri()));
-//                    nodes.addPropertyValue(new UriRef("http://example.org/ontology#textFound"), e.getLabel());
-//                    nodes.addPropertyValue(new UriRef("http://example.org/ontology#begin"), e.getBegin());
-//                    nodes.addPropertyValue(new UriRef("http://example.org/ontology#end"), e.getEnd());
-//                }
-//            }
+        // validate pipeline
+        if(!pipeline.Validate()){
+           throw new RuntimeException("Incompatible transformers!"); 
         }
+        
+        // run pipeline
+        if (data != null && !data.isEmpty()) {
+            output = pipeline.run(data);
+            node.addPropertyValue(SIOC.content, output);
+        }                
 
         return result;
     }
@@ -110,8 +98,8 @@ public class PipelineTransformer extends RdfGeneratingExtractor {
         try {
             MimeType mimeType = new MimeType("text/plain;charset=UTF-8");
             return Collections.singleton(mimeType);
-        } catch (MimeTypeParseException ex) {
-            throw new RuntimeException(ex);
+        } catch (MimeTypeParseException e) {
+            throw new RuntimeException(e);
         }
     }
 
